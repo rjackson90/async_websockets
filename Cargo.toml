@@ -1,0 +1,22 @@
+[package]
+name = "checkbot"
+version = "0.1.0"
+authors = ["Richard Jackson <rjackson90@gmail.com>"]
+
+[lib]
+name = "websocket_proto"
+
+[[bin]]
+name = "websocket_server"
+
+[dependencies]
+log = "^0.3"
+env_logger = "^0.3"
+
+bytes = { git = "https://github.com/carllerche/bytes" }
+byteorder = "^0.5"
+futures = "^0.1"
+tokio-core = "^0.1"
+tokio-proto = { git = "https://github.com/tokio-rs/tokio-proto" }
+tokio-service = { git = "https://github.com/tokio-rs/tokio-service" }
+
