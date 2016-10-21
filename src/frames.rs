@@ -6,7 +6,7 @@ use std::{io, str};
 use std::io::{Cursor,Read};
 use byteorder::BigEndian;
 
-type Frame = pipeline::Frame<WsFrame, WsFrame, io::Error>;
+pub type Frame = pipeline::Frame<WsFrame, WsFrame, io::Error>;
 
 #[derive(Debug)]
 pub enum WsFrame {
@@ -109,6 +109,14 @@ mod tests {
 	use tokio_proto::Parse;
 	use tokio_proto::pipeline::Frame::{Message, Error};
 
+	fn parse_message(message: &[u8]) -> ( Frame, usize ) {
+		let mut test_buf = BlockBuf::default();
+		let mut test_parser = Parser {};
+
+		test_buf.write_slice(message);
+		(test_parser.parse(&mut test_buf).expect("Failed to parse message"), test_buf.len())
+	}
+
 	#[test]
 	fn mod_good() {
 		assert!(true)
@@ -116,43 +124,32 @@ mod tests {
 
 	#[test]
 	fn single_unmasked_text() {
-		let mut test_buf = BlockBuf::default();
-		let mut test_parser = Parser {};
 		// Taken from RFC 6455 as an example of a text message containing 'Hello'
-		let message = vec![	0x81, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f];
+		let message = vec![	0x81, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f ];
+		let (frame, leftovers) = parse_message(&message);
 
-		test_buf.write_slice(&message);
-		let result = test_parser.parse(&mut test_buf);
-		assert!(result.is_some(), "Failed to parse message");
-
-		match result.unwrap() {
+		match frame {
 			Error(err) => assert!(true),
 			data => assert!(false, "expected an error, got {:?}", data)
 		};
 		
-		let remaining = test_buf.len();
-		assert!(remaining == message.len(), "Buffer has {} un-consumed bytes after parse", remaining);
+		assert!(leftovers == message.len(), "Buffer has {} un-consumed bytes after parse", leftovers);
 	}
 
 	#[test]
 	fn single_masked_text() {
-		let mut test_buf = BlockBuf::default();
-		let mut test_parser = Parser {};
 		// Taken from RFC 6455 as an example of a text message containing 'Hello'
 		let message = vec![	0x81, 0x85, 0x37, 0xfa, 0x21, 0x3d, 0x7f, 0x9f, 0x4d, 0x51, 0x58 ];
+		let (frame, leftovers) = parse_message(&message);
 
-		test_buf.write_slice(&message);
-		let result = test_parser.parse(&mut test_buf);
-		assert!(result.is_some(), "Failed to parse message");
-
-		let message = match result.unwrap() {
+		let proto_frame = match frame {
 			Message(msg) => msg,
 			err => {
 				assert!(false, "Parser returned error {:?}", err);
 				WsFrame::Close{code: 666, reason: "Bullshit".to_string()}
 			}
 		};
-		let ws_frame = match message {
+		let ws_frame = match proto_frame {
 			WsFrame::Text{ payload } => payload,
 			err => {
 				assert!(false, "Incorrect WsFrame variant. Got {:?}", err);
@@ -161,8 +158,54 @@ mod tests {
 		};
 		assert!(ws_frame == "Hello");
 
-		let remaining = test_buf.len();
-		assert!(remaining == 0, "Buffer has {} un-consumed bytes after parse", remaining);
+		assert!(leftovers == 0, "Buffer has {} un-consumed bytes after parse", leftovers);
+	}
 
+	#[test]
+	fn single_masked_ping() {
+		// A Simple masked PING frame with a payload of 'Hello'
+		let message = vec![ 0x89, 0x85, 0x37, 0xfa, 0x21, 0x3d, 0x7f, 0x9f, 0x4d, 0x51, 0x58];
+		let (frame, leftovers) = parse_message(&message);
+
+		let proto_frame = match frame {
+			Message(msg) => msg,
+			err => {
+				assert!(false, "Parser returned error {:?}", err);
+				WsFrame::Close{code: 666, reason: "Bullshit".to_string()}
+			}
+		};
+		let ws_frame = match proto_frame {
+			WsFrame::Ping{ payload } => payload,
+			err => {
+				assert!(false, "Incorrect WsFrame variant. Got {:?}", err);
+				vec![0xDE, 0xAD, 0xBE, 0xEF]
+			}
+		};
+		assert!(ws_frame == "Hello".as_bytes());
+		assert!(leftovers == 0, "Buffer has {} un-consumed bytes after parse", leftovers);
+	}
+
+	#[test]
+	fn single_masked_pong() {
+		// A simple masked PONG frame with a payload of 'Hello'
+		let message = vec![ 0x8a, 0x85, 0x37, 0xfa, 0x21, 0x3d, 0x7f, 0x9f, 0x4d, 0x51, 0x58];
+		let (frame, leftovers) = parse_message(&message);
+
+		let proto_frame = match frame {
+			Message(msg) => msg,
+			err => {
+				assert!(false, "Parser returned error {:?}", err);
+				WsFrame::Close{code: 666, reason: "Bullshit".to_string()}
+			}
+		};
+		let ws_frame = match proto_frame {
+			WsFrame::Pong{ payload } => payload,
+			err => {
+				assert!(false, "Incorrect WsFrame variant. Got {:?}", err);
+				vec![0xDE, 0xAD, 0xBE, 0xEF]
+			}
+		};
+		assert!(ws_frame == "Hello".as_bytes());
+		assert!(leftovers == 0, "Buffer has {} un-consumed bytes after parse", leftovers);
 	}
 }
