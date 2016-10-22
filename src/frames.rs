@@ -117,11 +117,11 @@ mod tests {
 		(test_parser.parse(&mut test_buf).expect("Failed to parse message"), test_buf.len())
 	}
 
-	fn serialize_message(message: WsFrame) -> Vec<u8> {
+	fn serialize_message(message: Frame) -> Vec<u8> {
 		let mut test_buf = BlockBuf::default();
 		let mut test_serializer = Serializer {};
 
-		test_serializer.serialize(Message(message), &mut test_buf);
+		test_serializer.serialize(message, &mut test_buf);
 		test_buf.buf().bytes().into_iter().map(|byte| *byte).collect::<Vec<u8>>()
 	}
 
@@ -219,22 +219,34 @@ mod tests {
 
 	#[test]
 	fn serialze_single_unmasked_text() {
-		unimplemented!()
+		let test_frame = Message(WsFrame::Text{ payload: "Hello".to_string() });
+		let expected_payload = vec![ 0x81, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f ];
+		let bytes = serialize_message(test_frame);
+		assert!(bytes == expected_payload, "Expected: {:?}\nActual: {:?}", expected_payload, bytes);
 	}
 
 	#[test]
 	fn serialize_single_unmasked_binary() {
-		unimplemented!()
+		let test_frame = Message(WsFrame::Binary{ payload: "Hello".as_bytes().to_vec() });
+		let expected_payload = vec![ 0x81, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f ];
+		let bytes = serialize_message(test_frame);
+		assert!(bytes == expected_payload, "Expected: {:?}\nActual: {:?}", expected_payload, bytes);
 	}
 
 	#[test]
 	fn serialize_single_unmasked_ping() {
-		unimplemented!()
+		let test_frame = Message(WsFrame::Ping{ payload: "Hello".as_bytes().to_vec() });
+		let expected_payload = vec![ 0x89, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f ];
+		let bytes = serialize_message(test_frame);
+		assert!(bytes == expected_payload, "Expected: {:?}\nActual: {:?}", expected_payload, bytes);
 	}
 
 	#[test]
 	fn serialize_single_unmasked_pong() {
-		unimplemented!()
+		let test_frame = Message(WsFrame::Pong{ payload: "Hello".as_bytes().to_vec() });
+		let expected_payload = vec![ 0x8a, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f ];
+		let bytes = serialize_message(test_frame);
+		assert!(bytes == expected_payload, "Expected: {:?}\nActual: {:?}", expected_payload, bytes);
 	}
 
 }
