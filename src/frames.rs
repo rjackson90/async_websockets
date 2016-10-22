@@ -105,8 +105,8 @@ impl Serialize for Serializer {
 mod tests {
 	use super::*;
 	use bytes::buf::BlockBuf;
-	use bytes::MutBuf;
-	use tokio_proto::Parse;
+	use bytes::{MutBuf,Buf};
+	use tokio_proto::{Parse, Serialize};
 	use tokio_proto::pipeline::Frame::{Message, Error};
 
 	fn parse_message(message: &[u8]) -> ( Frame, usize ) {
@@ -117,13 +117,21 @@ mod tests {
 		(test_parser.parse(&mut test_buf).expect("Failed to parse message"), test_buf.len())
 	}
 
+	fn serialize_message(message: WsFrame) -> Vec<u8> {
+		let mut test_buf = BlockBuf::default();
+		let mut test_serializer = Serializer {};
+
+		test_serializer.serialize(Message(message), &mut test_buf);
+		test_buf.buf().bytes().into_iter().map(|byte| *byte).collect::<Vec<u8>>()
+	}
+
 	#[test]
 	fn mod_good() {
 		assert!(true)
 	}
 
 	#[test]
-	fn single_unmasked_text() {
+	fn parse_single_unmasked() {
 		// Taken from RFC 6455 as an example of a text message containing 'Hello'
 		let message = vec![	0x81, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f ];
 		let (frame, leftovers) = parse_message(&message);
@@ -137,7 +145,7 @@ mod tests {
 	}
 
 	#[test]
-	fn single_masked_text() {
+	fn parse_single_masked_text() {
 		// Taken from RFC 6455 as an example of a text message containing 'Hello'
 		let message = vec![	0x81, 0x85, 0x37, 0xfa, 0x21, 0x3d, 0x7f, 0x9f, 0x4d, 0x51, 0x58 ];
 		let (frame, leftovers) = parse_message(&message);
@@ -162,7 +170,7 @@ mod tests {
 	}
 
 	#[test]
-	fn single_masked_ping() {
+	fn parse_single_masked_ping() {
 		// A Simple masked PING frame with a payload of 'Hello'
 		let message = vec![ 0x89, 0x85, 0x37, 0xfa, 0x21, 0x3d, 0x7f, 0x9f, 0x4d, 0x51, 0x58];
 		let (frame, leftovers) = parse_message(&message);
@@ -186,7 +194,7 @@ mod tests {
 	}
 
 	#[test]
-	fn single_masked_pong() {
+	fn parse_single_masked_pong() {
 		// A simple masked PONG frame with a payload of 'Hello'
 		let message = vec![ 0x8a, 0x85, 0x37, 0xfa, 0x21, 0x3d, 0x7f, 0x9f, 0x4d, 0x51, 0x58];
 		let (frame, leftovers) = parse_message(&message);
@@ -208,4 +216,25 @@ mod tests {
 		assert!(ws_frame == "Hello".as_bytes());
 		assert!(leftovers == 0, "Buffer has {} un-consumed bytes after parse", leftovers);
 	}
+
+	#[test]
+	fn serialze_single_unmasked_text() {
+		unimplemented!()
+	}
+
+	#[test]
+	fn serialize_single_unmasked_binary() {
+		unimplemented!()
+	}
+
+	#[test]
+	fn serialize_single_unmasked_ping() {
+		unimplemented!()
+	}
+
+	#[test]
+	fn serialize_single_unmasked_pong() {
+		unimplemented!()
+	}
+
 }
