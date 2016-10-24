@@ -1,8 +1,8 @@
 use tokio_proto::{pipeline, Parse, Serialize};
 use tokio_proto::pipeline::Frame::*;
 use bytes::buf::BlockBuf;
-use bytes::Buf;
-use std::{io, str};
+use bytes::{Buf,MutBuf};
+use std::{io, str, u16, u64};
 use std::io::{Cursor,Read};
 use byteorder::BigEndian;
 
@@ -97,7 +97,41 @@ impl Serialize for Serializer {
 	type In = Frame;
 
 	fn serialize(&mut self, frame: Frame, buf: &mut BlockBuf) {
-		unimplemented!()
+
+		// Step 1 is to figure out what kind of opcode we'll be using, 
+		// and to munge the payload into a Vec<u8>
+		let (opcode, data) = match frame.unwrap_msg() {
+			WsFrame::Text{ payload } 		=> (0x1, payload.into_bytes()),
+			WsFrame::Binary{ payload } 		=> (0x2, payload.clone()),
+			WsFrame::Ping{ payload } 		=> (0x9, payload.clone()),
+			WsFrame::Pong{ payload } 		=> (0xa, payload.clone()),
+			WsFrame::Close{ code, reason } 	=> (0x8, format!("{}: {}", code, reason).into_bytes())
+		};
+
+		// The next step is to correctly represent the payload length according
+		// to the rules in RFC 6455, where said length can have three different
+		// representations depending on how much space is needed 
+		buf.write_u8(0x80 | opcode);
+		const MEDIUM_MAX: usize = u16::MAX as usize;
+		const LARGE_MIN: usize = u16::MAX as usize + 1;
+		const LARGE_MAX: usize = u64::MAX as usize;
+		match data.len() {
+			len @ 0...125 => { 
+				buf.write_u8(len as u8); 
+			},
+			126...MEDIUM_MAX => {
+				buf.write_u8(126);
+				buf.write_u16::<BigEndian>(data.len() as u16);
+			},
+			LARGE_MIN...LARGE_MAX => {
+				buf.write_u8(127);
+				buf.write_u64::<BigEndian>(data.len() as u64);
+			},
+			_ => unreachable!()
+		};
+
+		// Finally, write the payload into the buffer. My, wasn't that simple!
+		buf.write_slice(&data);
 	}
 }
 
@@ -228,7 +262,7 @@ mod tests {
 	#[test]
 	fn serialize_single_unmasked_binary() {
 		let test_frame = Message(WsFrame::Binary{ payload: "Hello".as_bytes().to_vec() });
-		let expected_payload = vec![ 0x81, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f ];
+		let expected_payload = vec![ 0x82, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f ];
 		let bytes = serialize_message(test_frame);
 		assert!(bytes == expected_payload, "Expected: {:?}\nActual: {:?}", expected_payload, bytes);
 	}
