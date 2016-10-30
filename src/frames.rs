@@ -77,12 +77,12 @@ impl Parse for Parser {
 
 		// Return a different message type depending on the opcode
 		match opcode {
-			0x0 | 0x2 => Some(Message(WsFrame::Binary { payload: payload.clone() })),
+			0x2 => Some(Message(WsFrame::Binary { payload: payload.clone() })),
 			0x1 => Some(Message(WsFrame::Text { payload: String::from_utf8(payload).unwrap() })),
 			0x8 => Some(Message(WsFrame::Close { code: 1002, reason: String::from_utf8(payload).unwrap() })),
 			0x9 => Some(Message(WsFrame::Ping { payload: payload.clone() })),
 			0xA => Some(Message(WsFrame::Pong { payload: payload.clone() })),
-			_ => Some(Error(io::Error::new(io::ErrorKind::Other, "Invalid opcode")))
+			code => Some(Error(io::Error::new(io::ErrorKind::Other, format!("Unsupported opcode: {:x}", code))))
 		}
 	}
 
@@ -159,11 +159,9 @@ mod tests {
 		test_buf.buf().bytes().into_iter().map(|byte| *byte).collect::<Vec<u8>>()
 	}
 
-	#[test]
-	fn mod_good() {
-		assert!(true)
-	}
-
+	///////////////
+	// Parser Tests
+	/////////////// 
 	#[test]
 	fn parse_single_unmasked() {
 		// Taken from RFC 6455 as an example of a text message containing 'Hello'
@@ -200,6 +198,30 @@ mod tests {
 		};
 		assert!(ws_frame == "Hello");
 
+		assert!(leftovers == 0, "Buffer has {} un-consumed bytes after parse", leftovers);
+	}
+
+	#[test]
+	fn parse_single_masked_binary() {
+		// Same as the text example, but we expect a binary frame back instead
+		let message = vec![	0x82, 0x85, 0x37, 0xfa, 0x21, 0x3d, 0x7f, 0x9f, 0x4d, 0x51, 0x58 ];
+		let (frame, leftovers) = parse_message(&message);
+
+		let proto_frame = match frame {
+			Message(msg) => msg,
+			err => {
+				assert!(false, "Parser returned error {:?}", err);
+				WsFrame::Close{code: 666, reason: "Bullshit".to_string()}
+			}
+		};
+		let ws_frame = match proto_frame {
+			WsFrame::Binary{ payload } => payload,
+			err => {
+				assert!(false, "Incorrect WsFrame variant. Got {:?}", err);
+				"Bullshit".as_bytes().to_vec()
+			}
+		};
+		assert!(ws_frame == "Hello".as_bytes());
 		assert!(leftovers == 0, "Buffer has {} un-consumed bytes after parse", leftovers);
 	}
 
@@ -251,6 +273,9 @@ mod tests {
 		assert!(leftovers == 0, "Buffer has {} un-consumed bytes after parse", leftovers);
 	}
 
+	///////////////////
+	// Serializer Tests 
+	///////////////////
 	#[test]
 	fn serialze_single_unmasked_text() {
 		let test_frame = Message(WsFrame::Text{ payload: "Hello".to_string() });
@@ -283,4 +308,11 @@ mod tests {
 		assert!(bytes == expected_payload, "Expected: {:?}\nActual: {:?}", expected_payload, bytes);
 	}
 
+	////////////////
+	// Interop tests
+	////////////////
+	#[test]
+	fn interop_single_cient_server_text() {
+
+	}
 }
