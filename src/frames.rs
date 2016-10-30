@@ -1,23 +1,14 @@
-use tokio_proto::{pipeline, Parse, Serialize};
+use tokio_proto::{pipeline, Parse, Serialize, Framed};
 use tokio_proto::pipeline::Frame::*;
+use tokio_core::io::Io;
 use bytes::buf::BlockBuf;
 use bytes::{Buf,MutBuf};
 use std::{io, str, u16, u64};
 use std::io::{Cursor,Read};
 use byteorder::BigEndian;
+use super::WsFrame;
 
-pub type Frame = pipeline::Frame<WsFrame, WsFrame, io::Error>;
-
-#[derive(Debug)]
-pub enum WsFrame {
-	// Data Frames
-	Text { payload: String },
-	Binary { payload: Vec<u8> },
-	// Control Frames
-	Close { code: u16, reason: String },
-	Ping { payload: Vec<u8> },
-	Pong { payload: Vec<u8> }
-}
+pub type Frame = pipeline::Frame<WsFrame, (), io::Error>;
 
 pub struct Parser;
 
@@ -133,6 +124,17 @@ impl Serialize for Serializer {
 		// Finally, write the payload into the buffer. My, wasn't that simple!
 		buf.write_slice(&data);
 	}
+}
+
+pub type FramedWsTransport<T> = Framed<T, Parser, Serializer>;
+
+pub fn new_ws_transport<T>(inner: T) -> FramedWsTransport<T> where T: Io 
+{
+	Framed::new(inner
+		, Parser
+		, Serializer
+		, BlockBuf::default()
+		, BlockBuf::default())
 }
 
 #[cfg(test)]
@@ -313,6 +315,13 @@ mod tests {
 	////////////////
 	#[test]
 	fn interop_single_cient_server_text() {
+		let test_masked_bytes = vec![ 0x81, 0x85, 0x37, 0xfa, 0x21, 0x3d, 0x7f, 0x9f, 0x4d, 0x51, 0x58 ];
+		let test_unmasked_bytes = vec![ 0x81, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f ];
 
-	}
+		// Send the message through the system and see if it comes back OK
+		let (frame, leftovers) = parse_message(&test_masked_bytes);
+		assert!(leftovers == 0, "{} un-consumed bytes in the buffer after parse");
+		let bytes = serialize_message(frame);
+		assert!(bytes == test_unmasked_bytes, "Serialized frame is incorrect.\nExpected {:?}\nActual {:?}", test_unmasked_bytes, bytes);
+	}	
 }
