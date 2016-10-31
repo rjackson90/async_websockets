@@ -8,10 +8,12 @@ use std::net::SocketAddr;
 
 use super::WsFrame;
 use super::frames::new_ws_transport;
+use super::protocol::*;
 
 
 struct WebSocketService<T> {
-	inner: T
+	inner: T,
+	protocol: WsProtocol<Connecting>
 }
 
 impl<T> Service for WebSocketService<T>
@@ -43,7 +45,10 @@ pub fn serve<T>(handle: &Handle, addr: SocketAddr, client_service: T)
 	+ 'static
 {
 	try!(server::listen(handle, addr, move |stream| {
-		let service = WebSocketService{ inner: try!(client_service.new_service()) };
+		let service = WebSocketService{ 
+			inner: try!(client_service.new_service()),
+			protocol: WsProtocol::new() 
+		};
 		pipeline::Server::new(service, new_ws_transport(stream))
 	}));
 	Ok(())

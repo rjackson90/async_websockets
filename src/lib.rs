@@ -10,6 +10,7 @@ extern crate byteorder;
 
 mod frames;
 mod service;
+mod protocol;
 
 #[derive(Debug)]
 pub enum WsFrame {
